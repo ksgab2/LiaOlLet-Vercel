@@ -83,7 +83,7 @@ export default function Aspect() {
         {ASPECTS.map((aspect, index) => (
           <div
             key={aspect.id}
-            ref={(el) => (cardsRef.current[index] = el)}
+            ref={(el) => { cardsRef.current[index] = el; }}
             onClick={() => handleSelect(aspect.id)}
             onMouseEnter={() => handleMouseEnter(index)}
             onMouseLeave={() => handleMouseLeave(index)}
