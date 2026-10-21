@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-archive-bg: brown;
+  --color-archive-paper: #F5F2EC;
+  --color-archive-craft: #D3C9B8;
+  --color-archive-dark: #1A1816;
+  --color-archive-muted: #6E675F;
+  --color-archive-terracotta: #9B4028;
+
+  --font-serif: "Noto Serif KR", serif;
+  --font-display: "Playfair Display", serif;
+  --font-mono: "Space Mono", monospace;
+}
+
+/* Vite 기본 여백 제거 및 배경색 강제 적용 */
+html, body, #root {
+  background-color: var(--color-archive-bg) !important; /* 강제 적용 */
+  color: var(--color-archive-paper);
+  font-family: var(--font-serif);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  width: 100%;
+}

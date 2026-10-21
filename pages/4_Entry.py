@@ -1,6 +1,6 @@
 import streamlit as st
 
-from Lib.pipeline import analyze_entry, extract_keywords
+from backend.pipeline import analyze_entry, extract_keywords
 
 st.markdown("### 기록 도록: 감각과 소스 수집")
 

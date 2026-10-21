@@ -1,6 +1,6 @@
 import streamlit as st
 from Lib.render import render_page
-from Lib.supabase_client import get_supabase
+from backend.supabase_client import get_supabase
 
 supabase = get_supabase()
 

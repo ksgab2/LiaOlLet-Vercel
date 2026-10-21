@@ -1,7 +1,7 @@
 import streamlit as st
 
 from Lib.render import render_page
-from Lib.supabase_client import get_supabase
+from backend.supabase_client import get_supabase
 
 # 결과 화면을 넓게 쓰기 위한 설정 (필요시 app.py에 있어도 됨)
 #st.set_page_config(layout="wide")
