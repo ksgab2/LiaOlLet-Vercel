@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { saveEntryToDB } from '../lib/api';
+
 
 interface EntryResult {
   persona: string;
@@ -30,22 +32,22 @@ export default function Result() {
   if (!data) return null;
 
   // 서가(Shelves)에 저장하는 로직 (현재는 로컬 스토리지 활용, 추후 Supabase 연동)
-  const handleSaveToShelves = () => {
+ const handleSaveToShelves = async () => {
     setIsSaving(true);
+    try {
+      // 백엔드 API를 통해 Supabase에 저장
+      await saveEntryToDB(data);
 
-    // 기존 서가 데이터 불러오기 (없으면 빈 배열)
-    const existingShelves = JSON.parse(localStorage.getItem('liaollet_shelves') || '[]');
+      // 임시 결과 삭제
+      sessionStorage.removeItem('entry_result');
 
-    // 새 데이터 추가 (맨 앞에 추가)
-    localStorage.setItem('liaollet_shelves', JSON.stringify([data, ...existingShelves]));
-
-    // 임시 결과 삭제
-    sessionStorage.removeItem('entry_result');
-
-    setTimeout(() => {
-      setIsSaving(false);
       navigate('/shelves'); // 서가 페이지로 이동
-    }, 1000);
+    } catch (error) {
+      console.error(error);
+      alert('저장에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // 폐기(다시 만들기) 로직
@@ -57,14 +59,24 @@ export default function Result() {
   };
 
   // 이미지 다운로드 로직 (단순 링크 다운로드 방식)
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!data.photos || data.photos.length === 0) return;
-    const link = document.createElement('a');
-    link.href = data.photos[0];
-    link.download = `LIAOLLET_${data.persona}_${data.date.replace(/\./g, '')}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const response = await fetch(data.photos[0]); // URL에서 이미지 가져오기
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `LIAOLLET_${data.persona}_${data.date.replace(/\./g, '')}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('다운로드 실패:', error);
+      alert('이미지 다운로드에 실패했습니다.');
+    }
   };
 
   const personaNames: Record<string, string> = {

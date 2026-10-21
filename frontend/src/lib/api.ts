@@ -35,3 +35,27 @@ export const analyzeEntry = async (
   const response = await api.post('/api/analyze', formData);
   return response.data;
 };
+
+// ... (기존 extractKeywords, analyzeEntry 코드 유지) ...
+
+// 👇 JSON 데이터를 보낼 때는 헤더를 명시적으로 지정해 줍니다.
+export const saveEntryToDB = async (data: any) => {
+  const response = await api.post('/api/save_entry', data, {
+    headers: {
+      'Content-Type': 'application/json', // 👈 이 부분이 핵심입니다!
+    },
+  });
+  return response.data;
+};
+
+// 2. 서가 데이터 불러오기
+export const fetchEntriesFromDB = async () => {
+  const response = await api.get('/api/get_entries');
+  return response.data;
+};
+
+// 3. 좋아요 증가
+export const likeEntryInDB = async (id: string) => {
+  const response = await api.post(`/api/like/${id}`);
+  return response.data;
+};

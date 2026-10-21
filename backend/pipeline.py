@@ -1,4 +1,5 @@
 import os
+from supabase import create_client, Client
 import base64
 import datetime
 import concurrent.futures
@@ -11,6 +12,10 @@ from google import genai
 from google.genai import types
 from PIL import Image
 from tenacity import retry, stop_after_attempt, wait_exponential
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 로깅 설정 (Vercel 대시보드에서 확인 가능)
 logger = logging.getLogger(__name__)
@@ -98,7 +103,7 @@ def extract_keywords(files_bytes: list[bytes], text: str) -> list[str]:
     contents = [prompt]
     for img_bytes in cleaned_bytes:
         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
-        
+
     try:
         resp = client.models.generate_content(model=GEMINI_MODEL, contents=contents)
         keywords = [k.strip() for k in resp.text.replace("\n", "").split(",") if k.strip().startswith("#")]
@@ -114,7 +119,7 @@ def generate_collage_image(user_text: str, persona: str, aspect_ratio: str = "1:
     style = COLLAGE_STYLE_PROMPTS.get(persona, COLLAGE_STYLE_PROMPTS["lia"])
     prompt = f"{style}\n\nUser's memory/text: {user_text or 'quiet everyday moment'}"
     client = _get_client()
-    
+
     try:
         response = client.models.generate_content(
             model=NANO_BANANA_LITE_MODEL,
@@ -126,9 +131,25 @@ def generate_collage_image(user_text: str, persona: str, aspect_ratio: str = "1:
         )
         for part in response.candidates[0].content.parts:
             if part.inline_data is not None:
-                return _bytes_to_data_url(part.inline_data.data)
+                img_bytes = part.inline_data.data
+
+                # 👇 Supabase Storage 업로드 로직 추가
+                import uuid
+                file_name = f"{persona}_{uuid.uuid4().hex[:8]}.jpg"
+
+                # Storage에 업로드 (content-type 지정 필수)
+                supabase.storage.from_("collages").upload(
+                    path=file_name,
+                    file=img_bytes,
+                    file_options={"content-type": "image/jpeg"}
+                )
+
+                # 업로드된 파일의 공개 URL 반환
+                public_url = supabase.storage.from_("collages").get_public_url(file_name)
+                return public_url
+
     except Exception as e:
-        logger.error(f"콜라주 생성 실패: {e}")
+        logger.error(f"콜라주 생성/업로드 실패: {e}")
     return ""
 
 # ==========================================
@@ -164,10 +185,10 @@ def analyze_entry(files_bytes: list[bytes], text: str, tags: list[str], aspect: 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_text = executor.submit(_generate_text_with_retry, prompt_text)
         future_image = executor.submit(generate_collage_image, user_text=text, persona=aspect)
-        
+
         try: poetic_story = future_text.result()
         except: poetic_story = FALLBACK_STORY[aspect]
-        
+
         try: collage_url = future_image.result()
         except: collage_url = ""
 

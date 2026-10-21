@@ -1,55 +1,80 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchEntriesFromDB, likeEntryInDB } from '../lib/api';
 
 interface EntryResult {
+  id: string;
   persona: string;
   date: string;
   quote: string;
   poetic_story: string;
-  tags: string[];
-  photos: string[];
-  likes: number;
+  tags: string[] | null;    // 👈 null 허용
+  photos: string[] | null;  // 👈 null 허용
+  likes: number | null;     // 👈 null 허용
 }
 
 export default function Shelves() {
   const navigate = useNavigate();
   const [items, setItems] = useState<EntryResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'lia' | 'ol' | 'let'>('all');
   const [selectedItem, setSelectedItem] = useState<EntryResult | null>(null);
 
-  // 로컬 스토리지에서 데이터 불러오기
   useEffect(() => {
-    const saved = localStorage.getItem('liaollet_shelves');
-    if (saved) {
-      setItems(JSON.parse(saved));
-    }
+    const loadData = async () => {
+      try {
+        const data = await fetchEntriesFromDB();
+
+        // 데이터 가공 및 null 방어
+        const formattedData = data.map((item: any) => ({
+          ...item,
+          date: item.created_at ? item.created_at.split('T')[0].replace(/-/g, '.') : '날짜 없음',
+          likes: item.likes || 0,
+          tags: item.tags || [],
+          photos: item.photos || [],
+        }));
+
+        setItems(formattedData);
+      } catch (error) {
+        console.error('데이터 불러오기 실패:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
   }, []);
 
-  // 필터링된 아이템 목록
   const filteredItems = filter === 'all'
     ? items
     : items.filter(item => item.persona === filter);
 
-  // 좋아요(하트) 클릭 로직
-  const handleLike = (e: React.MouseEvent, index: number) => {
-    e.stopPropagation(); // 카드 클릭(모달 열림) 이벤트 방지
-    const updatedItems = [...items];
-    // 필터링된 배열의 인덱스가 아닌 원본 배열에서의 인덱스를 찾아야 함
-    const originalIndex = items.findIndex(item => item.date === filteredItems[index].date && item.quote === filteredItems[index].quote);
+  const handleLike = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await likeEntryInDB(id);
 
-    if (originalIndex !== -1) {
-      updatedItems[originalIndex].likes += 1;
-      setItems(updatedItems);
-      localStorage.setItem('liaollet_shelves', JSON.stringify(updatedItems));
+      setItems(prevItems => prevItems.map(item =>
+        item.id === id ? { ...item, likes: (item.likes || 0) + 1 } : item
+      ));
 
-      // 모달이 열려있다면 모달 데이터도 업데이트
-      if (selectedItem && selectedItem.date === updatedItems[originalIndex].date) {
-        setSelectedItem(updatedItems[originalIndex]);
+      if (selectedItem && selectedItem.id === id) {
+        setSelectedItem(prev => prev ? { ...prev, likes: (prev.likes || 0) + 1 } : null);
       }
+    } catch (error) {
+      console.error('좋아요 실패:', error);
     }
   };
 
   const personaNames: Record<string, string> = { lia: 'LIA', ol: 'OL', let: 'LET' };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-archive-bg flex flex-col items-center justify-center text-archive-paper">
+        <div className="w-10 h-10 border-4 border-archive-craft border-t-archive-terracotta rounded-full animate-spin mb-4"></div>
+        <p className="font-mono text-sm">서가를 불러오는 중...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-archive-bg text-archive-paper p-6 md:p-12 font-serif relative">
@@ -88,44 +113,39 @@ export default function Shelves() {
             </button>
           </div>
         ) : (
-          filteredItems.map((item, index) => (
+          filteredItems.map((item) => (
             <div
-              key={index}
+              key={item.id}
               onClick={() => setSelectedItem(item)}
               className="bg-archive-paper p-4 relative cursor-pointer hover:shadow-xl transition-all group flex flex-col justify-between"
             >
-              {/* 테이프 장식 */}
               <div className="absolute -top-2 left-4 w-16 h-5 bg-archive-craft/80 -rotate-1 shadow-sm z-10"></div>
 
               <div>
-                {/* 상단 뱃지 & 날짜 */}
                 <div className="flex justify-between items-center mb-3 pt-1 font-mono text-[9px] text-archive-dark">
                   <span className="px-2 py-0.5 bg-archive-dark text-archive-paper font-bold uppercase">
-                    {personaNames[item.persona]}
+                    {personaNames[item.persona] || item.persona}
                   </span>
                   <span className="text-archive-muted">{item.date}</span>
                 </div>
 
-                {/* 이미지 썸네일 */}
                 <div className="bg-[#1C1A18] p-1.5 mb-3 aspect-[4/3] flex items-center justify-center overflow-hidden">
-                  {item.photos && item.photos[0] ? (
+                  {item.photos && item.photos.length > 0 ? (
                     <img src={item.photos[0]} alt="thumbnail" className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500" />
                   ) : (
                     <span className="text-archive-muted text-xs">No Image</span>
                   )}
                 </div>
 
-                {/* 문장 요약 */}
                 <p className="text-xs text-archive-dark italic line-clamp-2 mb-3">
-                  "{item.quote}"
+                  "{item.quote || '문장 없음'}"
                 </p>
               </div>
 
-              {/* 하단 태그 & 좋아요 */}
               <div className="pt-2 border-t border-archive-craft/60 flex justify-between items-center font-mono text-[10px] text-archive-muted">
-                <span className="truncate max-w-[120px]">{item.tags[0] || '#취향기록'}</span>
+                <span className="truncate max-w-[120px]">{item.tags && item.tags.length > 0 ? item.tags[0] : '#취향기록'}</span>
                 <button
-                  onClick={(e) => handleLike(e, index)}
+                  onClick={(e) => handleLike(e, item.id)}
                   className="flex items-center space-x-1 hover:text-archive-terracotta transition-colors"
                 >
                   <span>♥</span>
@@ -137,7 +157,6 @@ export default function Shelves() {
         )}
       </div>
 
-      {/* 새 아카이브 추가 버튼 */}
       <div className="max-w-5xl mx-auto text-center pt-12 mt-12 border-t border-archive-muted/30">
         <button
           onClick={() => navigate('/')}
@@ -148,18 +167,17 @@ export default function Shelves() {
       </div>
 
       {/* ========================================== */}
-      {/* 상세 모달 (카드를 클릭했을 때) */}
+      {/* 상세 모달 */}
       {/* ========================================== */}
       {selectedItem && (
         <div
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setSelectedItem(null)} // 배경 클릭 시 닫기
+          onClick={() => setSelectedItem(null)}
         >
           <div
             className="bg-archive-paper text-archive-dark w-full max-w-lg p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto shadow-2xl"
-            onClick={(e) => e.stopPropagation()} // 모달 내부 클릭 시 닫힘 방지
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* 닫기 버튼 */}
             <button
               onClick={() => setSelectedItem(null)}
               className="absolute top-4 right-4 text-archive-muted hover:text-archive-terracotta font-mono text-lg"
@@ -169,51 +187,41 @@ export default function Shelves() {
 
             <div className="absolute -top-2 left-6 w-20 h-5 bg-archive-craft/80 -rotate-1 shadow-sm"></div>
 
-            {/* 모달 헤더 */}
             <div className="flex items-center space-x-2 mb-4 pt-2 font-mono text-[10px]">
               <span className="px-2 py-0.5 bg-archive-dark text-archive-paper uppercase font-bold">
-                {personaNames[selectedItem.persona]}
+                {personaNames[selectedItem.persona] || selectedItem.persona}
               </span>
               <span className="text-archive-muted">{selectedItem.date}</span>
             </div>
 
-            {/* 모달 이미지 */}
             <div className="bg-[#1C1A18] p-2 mb-4">
-              <img src={selectedItem.photos[0]} alt="detail" className="w-full h-auto max-h-[40vh] object-contain mx-auto" />
+              {selectedItem.photos && selectedItem.photos.length > 0 ? (
+                <img src={selectedItem.photos[0]} alt="detail" className="w-full h-auto max-h-[40vh] object-contain mx-auto" />
+              ) : (
+                <div className="text-archive-muted text-center py-10">이미지가 없습니다.</div>
+              )}
             </div>
 
-            {/* 모달 텍스트 */}
             <div className="border border-archive-craft p-4 mb-4">
               <p className="text-xs text-archive-dark leading-relaxed font-serif">
-                {selectedItem.poetic_story}
+                {selectedItem.poetic_story || '해설이 없습니다.'}
               </p>
             </div>
 
             <div className="bg-archive-craft/20 p-3 text-xs text-archive-muted font-serif mb-5">
               <div className="mb-2">
                 <strong className="font-mono text-[10px] text-archive-dark block">QUOTED TEXT</strong>
-                <span className="italic">"{selectedItem.quote}"</span>
+                <span className="italic">"{selectedItem.quote || ''}"</span>
               </div>
               <div>
                 <strong className="font-mono text-[10px] text-archive-dark block">KEYWORDS</strong>
-                <span>{selectedItem.tags.join(' ')}</span>
+                <span>{selectedItem.tags && selectedItem.tags.length > 0 ? selectedItem.tags.join(' ') : '#취향기록'}</span>
               </div>
             </div>
 
-            {/* 모달 하단 버튼 */}
             <div className="flex justify-between items-center font-mono text-xs">
               <button
-                onClick={(e) => {
-                  // 모달 내에서 좋아요 누르기
-                  const updatedItems = [...items];
-                  const idx = items.findIndex(i => i.date === selectedItem.date && i.quote === selectedItem.quote);
-                  if (idx !== -1) {
-                    updatedItems[idx].likes += 1;
-                    setItems(updatedItems);
-                    setSelectedItem(updatedItems[idx]);
-                    localStorage.setItem('liaollet_shelves', JSON.stringify(updatedItems));
-                  }
-                }}
+                onClick={(e) => handleLike(e, selectedItem.id)}
                 className="px-4 py-2 border border-archive-craft hover:bg-archive-craft/30 text-archive-dark transition-colors flex items-center space-x-1.5"
               >
                 <span className="text-archive-terracotta">♥</span>
@@ -229,7 +237,6 @@ export default function Shelves() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
