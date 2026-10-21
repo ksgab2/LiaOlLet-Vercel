@@ -22,7 +22,7 @@ app = FastAPI(title="LIAOLLET API")
 # CORS 설정 (프론트엔드 5173 포트 허용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://liaollet-piwu7eu5c-lia-ol-let.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
